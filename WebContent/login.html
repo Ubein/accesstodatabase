@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+ 
+<html>
+    <head>
+        <title>Echo Chamber</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width">
+        <meta name="google-signin-client_id" content="616574469996-3u2l17eaili74pndg0u8spckr139tq8o.apps.googleusercontent.com">
+          <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+          
+   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+   <script src="https://apis.google.com/js/client:platform.js?onload=renderButton" async defer></script>
+    </head>
+    <style>
+.profile{
+    border: 3px solid #B7B7B7;
+    padding: 10px;
+    margin-top: 10px;
+    width: 350px;
+    background-color: #F7F7F7;
+    height: 160px;
+}
+.profile p{margin: 0px 0px 10px 0px;}
+.head{margin-bottom: 10px;}
+.head a{float: right;}
+.profile img{width: 100px;float: left;margin: 0px 10px 10px 0px;}
+.proDetails{float: left;}
+.databases{margin-top:10px;}
+</style>
+    <body>
+    <div id="gSignIn"></div>
+    <div class="userContent"></div>
+     <div class="databases">
+            <form name="myform">
+   <select name="master" size="1" id="master">
+   </select>
+   </form>
+   <button type="button" onclick="goTo();" >Go</button>
+        </div>
+        <!-- Server responses get written here -->
+        <div id="tables"></div>
+
+        <!-- Script to utilise the WebSocket -->
+        <script type="text/javascript">
+        
+        var webSocket;
+        
+        var master= document.myform.master;
+  
+
+
+            function openSocket(){
+                // Ensures only one connection is open at a time
+                if(webSocket !== undefined && webSocket.readyState !== WebSocket.CLOSED){
+                   writeResponse("WebSocket is already opened.");
+                    return;
+                }
+                // Create a new instance of the websocket
+                webSocket = new WebSocket("wss://projekt2017.azurewebsites.net/EchoChamber/echo");
+                 
+                /**
+                 * Binds functions to the listeners for the websocket.
+                 */
+                webSocket.onopen = function(event){
+                    // For reasons I can't determine, onopen gets called twice
+                    // and the first time event.data is undefined.
+                    // Leave a comment if you know the answer.
+                    if(event.data === undefined)
+                        return;
+ 
+                    writeResponse(event.data);
+                    
+                };
+                webSocket.onmessage = function(event){
+                    writeResponse(event.data);
+                };
+ 
+                webSocket.onclose = function(event){
+                };
+            }
+            /**
+             * Sends the value of the text input to the server
+             */
+            function send(text){
+                webSocket.send(text);
+            }
+            
+            function closeSocket(){
+                webSocket.close();
+            }
+ 
+            function writeResponse(text){
+             console.log(text);
+             master.options[master.options.length]= new Option(text,text,false,false);
+            }
+            
+            function goTo(){
+             text = document.getElementById("master").value;
+             var temp = location.href='showtable.html?key='+text.toString();
+            }
+
+            function onSuccess(googleUser) {
+                var profile = googleUser.getBasicProfile();
+                gapi.client.load('plus', 'v1', function () {
+                    var request = gapi.client.plus.people.get({
+                        'userId': 'me'
+                    });
+                    //Display the user details
+                    request.execute(function (resp) {
+                        var profileHTML = '<div class="profile"><div class="head">Welcome '+resp.name.givenName+'! <a href="javascript:void(0);" onclick="signOut();">Sign out</a></div>';
+                        profileHTML += '<img src="'+resp.image.url+'"/><div class="proDetails"><p>'+resp.displayName+'</p><p>'+resp.emails[0].value+'</p><p>'+resp.gender+'</p><p>'+resp.id+'</p><p><a href="'+resp.url+'">View Google+ Profile</a></p></div></div>';
+                        $('.userContent').html(profileHTML);
+                        $('#gSignIn').slideUp('slow');
+                    });
+                });
+                openSocket();
+            }
+            function onFailure(error) {
+                alert(error);
+            }
+            function renderButton() {
+                gapi.signin2.render('gSignIn', {
+                    'scope': 'profile email',
+                    'width': 240,
+                    'height': 50,
+                    'longtitle': true,
+                    'theme': 'dark',
+                    'onsuccess': onSuccess,
+                    'onfailure': onFailure
+                });
+            }
+            function signOut() {
+                var auth2 = gapi.auth2.getAuthInstance();
+                auth2.signOut().then(function () {
+                    $('.userContent').html('');
+                    $('#gSignIn').slideDown('slow');
+                });
+                closeSocket();
+            }
+           
+        </script>
+       
+    </body>
+</html>

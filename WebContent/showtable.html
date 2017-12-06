@@ -1,0 +1,205 @@
+
+
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="utf-8">
+<link
+	href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css"
+	rel="stylesheet">
+<link
+	href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css"
+	rel="stylesheet">
+<link
+	href="https://cdn.datatables.net/buttons/1.4.2/css/buttons.bootstrap.min.css"
+	rel="stylesheet">
+<link
+	href="https://cdn.datatables.net/select/1.2.3/css/select.bootstrap.min.css"
+	rel="stylesheet">
+<link href="editor.bootstrap.min.css" rel="stylesheet">
+<script
+	src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+<script type="text/javascript" language="javascript"
+	src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+<script type="text/javascript" language="javascript"
+	src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
+<script type="text/javascript" language="javascript"
+	src="https://cdn.datatables.net/select/1.2.3/js/dataTables.select.min.js"></script>
+</head>
+
+<body>
+
+	<div>
+		Query Text:<br> <input id="querytext" type="text" style="width: 1000px">
+		<button type="button" onclick="sendQuery();">Send Query</button>
+		<button onclick="goBack()">Back to previous page</button><br>
+	</div>
+	<!-- Server responses get written here -->
+	<div id="tables" class="container"></div>
+	<div id="buttons"></div>
+	<button type="button" onclick="addrow();">Add</button>
+	<button id="editbutton" type="button" onclick="editrow();">Edit</button>
+	<button id="deletebutton" type="button" onclick="deleterow();">Delete</button>
+		<div id="textareas"></div>
+	<!-- Script to utilise the WebSocket -->
+	<script type="text/javascript">
+		var rows;
+		var cols;
+		var url = new URL(window.location.href);
+		var base = url.searchParams.get("key");
+		var editor
+		var webSocket;
+		var table;
+		var columnsname = new Array();
+		var data;
+		document.getElementById("deletebutton").disabled = true;
+		document.getElementById("editbutton").disabled = true;
+		openSocket();
+		function openSocket() {
+			// Ensures only one connection is open at a time
+			if (webSocket !== undefined
+					&& webSocket.readyState !== WebSocket.CLOSED) {
+				writeResponse("WebSocket is already opened.");
+				return;
+			}
+
+			// Create a new instance of the websocket
+			webSocket = new WebSocket(
+					"wss://projekt2017.azurewebsites.net/EchoChamber/echo");
+
+			/**
+			 * Binds functions to the listeners for the websocket.
+			 */
+			webSocket.onopen = function(event) {
+				// For reasons I can't determine, onopen gets called twice
+				// and the first time event.data is undefined.
+				// Leave a comment if you know the answer.
+				if (event.data === undefined)
+					return;
+
+				writeResponse(event.data);
+			};
+
+			webSocket.onmessage = function(event) {
+				writeResponse(event.data);
+			};
+
+			webSocket.onclose = function(event) {
+				writeResponse("Connection closed");
+			};
+		}
+
+		/**
+		 * Sends the value of the text input to the server
+		 */
+		function send(text) {
+			webSocket.send(text);
+		}
+
+		function closeSocket() {
+			webSocket.close();
+		}
+		function goBack() {
+			window.history.back();
+		}
+
+		function writeResponse(text) {
+			console.log(text);
+
+			var temp = text.split(":");
+			if (temp[0] == "MESSAGE" && temp[1] == "Connected to the server") {
+				console.log("Lama");
+				webSocket.send("select * from " + base);
+			} else if (temp[0] == "MESSAGE" && temp[1] == "Refresh") {
+				location.reload(true);
+			} else if (temp[0] == "MESSAGE" && temp[1] == "COLUMNSNAME") {
+				columnsname.push(temp[2]);
+				var dummy='<br>'+temp[2]+': <input id="'+temp[2]+'" type="text">';
+				document.getElementById('textareas').innerHTML+= dummy;
+			} else if (temp[0] == "ERROR" || temp[0] == "MESSAGE") {
+				tables.innerHTML += "<p>" + temp[1] + "</p>";
+			} else {
+				tables.innerHTML += text;
+				$(document).ready(function() {
+					({
+						table : "#example"
+					});
+					table = $('#example').DataTable({
+						select : true
+
+					});
+					$('#example tbody').on('click', 'tr', function() {
+						if ( table.rows( '.selected' ).any() ){
+							document.getElementById("deletebutton").disabled = false;
+							document.getElementById("editbutton").disabled = false;
+						}else{
+							document.getElementById("deletebutton").disabled = true;
+							document.getElementById("editbutton").disabled = true;
+						}
+						data = table.row(this).data();
+						console.log(data);
+					});
+				});
+
+			}
+		}
+		function sendQuery() {
+			var text = document.getElementById("querytext").value;
+			tables.innerHTML = "";
+			document.getElementById('textareas').innerHTML=""
+			webSocket.send(text);
+		}
+		function deleterow() {
+			console.log(columnsname);
+			var sqltext="Delete from "+base+" where ";
+			var i=0;
+			for(i=0; i<columnsname.length;i++){
+				sqltext+=columnsname[i]+"="+"\'"+data[i]+"\' AND ";
+			}
+			sqltext=sqltext.slice(0,-4);
+			webSocket.send(sqltext);
+		}
+		function addrow() {
+			console.log(columnsname);
+			var sqltext="Insert into "+base+" (";			
+			var i=0;
+			for(i=0; i<columnsname.length;i++){
+				if(document.getElementById(columnsname[i]).value!="")
+				sqltext+=columnsname[i]+", ";
+			}
+			sqltext=sqltext.slice(0,-2);
+			sqltext+=") values ("
+			var i=0;
+			for(i=0; i<columnsname.length;i++){
+				if(document.getElementById(columnsname[i]).value!="")
+				sqltext+="'"+document.getElementById(columnsname[i]).value+"', ";
+			}
+			sqltext=sqltext.slice(0,-2);
+			sqltext+=")"
+			console.log(sqltext);
+			webSocket.send(sqltext);
+		}
+		function editrow() {
+			console.log(columnsname);
+			var sqltext="Update "+base+" set ";
+			var i=0;
+			for(i=0; i<columnsname.length;i++){
+				if(document.getElementById(columnsname[i]).value!="")
+				sqltext+=columnsname[i]+" = '"+document.getElementById(columnsname[i]).value+"', " ;
+			}
+			sqltext=sqltext.slice(0,-2);
+			sqltext+=" where ";
+			var i=0;
+			for(i=0; i<columnsname.length;i++){
+				sqltext+=columnsname[i]+"="+"\'"+data[i]+"\' AND ";
+			}
+			sqltext=sqltext.slice(0,-4);
+			console.log(sqltext);
+			webSocket.send(sqltext);
+		}
+	</script>
+
+</body>
+</html>
